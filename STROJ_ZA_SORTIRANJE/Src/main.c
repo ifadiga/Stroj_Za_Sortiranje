@@ -40,7 +40,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define CIJEV_PUNO 3000 //postaviti vrijednost adc-senzora kada u cijevi ima predmeta
+//senzor mora oèitati vecu vrijednost od CIJEV_PUNO da bi stroj radio
+#define BROJ_KORAKAK_ZA_KRUG 200  //definiramo koliko stepper motor mora napraviti koraka da bi obišao jedan krug
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -58,10 +60,16 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 volatile uint8_t rx_buff[RX_BUFF_SIZE];
 
+uint8_t msg_protocol[33];
+uint8_t det_obj_buff[3];
+
+uint8_t sys_flag = 0;
+
 //faktor za vagu koji treba podesiti da bi dobro vagala( za svaki load cell drugaciji)
 float calibration_factor = -900;
 long OFFSET = 0;
 float SCALE = 1;
+int stepperPosition = 0;
 
 struct Osobine {
 	char boja;
@@ -71,7 +79,6 @@ struct Osobine {
 	int max_masa;
 	int broj_poklapanja;
 };
-
 
 struct Osobine Predmet;
 struct Osobine Spremnik[3];
@@ -101,6 +108,9 @@ void Parse_spremnik();
 //funkcija za parsiranje podataka o slikanom predmetu
 void Parse_predmet();
 
+int CharToInt3(int n, uint8_t* Polje);
+int CharToInt4(int n, uint8_t* Polje);
+
 /*prototip funkcije za analizu predmeta
  *funkcija prema definiranim osobinama spremnika i predmeta sprema u varijablu odabrani_spremnik
  *prema cemu se poklapa svaki spremnik sa trenutnim predmetom(boja, masa i oblik)
@@ -125,7 +135,12 @@ void Stepper_Step(int dir, int step);
 
 //funkcija za servo motor, timer je za koji timer postavljamo pwm, a kut je kut motora
 void Servo_motor(PWM_CHANNEL PWM_CH, int kut);
-
+//funkcija koja pomice predmet iz cijevi na vagu.
+void Pomakni_na_vagu(void);
+//gurne predmet sa vage u spremnik
+void Makni_sa_vage(void);
+//funkcija koja postavlja spremnik koji joj predamo kao argument
+void Postavi_spremnik(int spremnik);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -139,78 +154,81 @@ void Servo_motor(PWM_CHANNEL PWM_CH, int kut);
  */
 int main(void) {
 	/* USER CODE BEGIN 1 */
-
 	/* USER CODE END 1 */
-
 	/* MCU Configuration--------------------------------------------------------*/
-
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
-
 	/* USER CODE BEGIN Init */
-
 	/* USER CODE END Init */
-
 	/* Configure the system clock */
 	SystemClock_Config();
-
 	/* USER CODE BEGIN SysInit */
-
 	/* USER CODE END SysInit */
-
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
 	MX_ADC1_Init();
 	MX_TIM1_Init();
 	MX_USART2_UART_Init();
-
 	/* USER CODE BEGIN 2 */
-
 	__HAL_UART_ENABLE_IT(&huart2, UART_IT_RXNE); // <-------- ENABLE RXNE
-
-//  HX711_set_scale(1);
-//  HX711_Tare(10);
-//  HX711_set_scale(calibration_factor);
-
-	uint8_t podatak[5] = "abcde";
-	int masa = 10;
-
-	//HAL_UART_Transmit(&huart2, podatak, sizeof(podatak), 0xFFFF);
-
+	/*
+	 HX711_set_scale(1);
+	 HX711_Tare(10);
+	 HX711_set_scale(calibration_factor);
+	 */
+	//kod za pokretanje TIM1 i PWM signala
 	HAL_TIM_Base_Start(&htim1);
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1); //Start Pwm signal on PA-8 Pin
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2); //Start Pwm signal on PA-9 Pin
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3); //Start Pwm signal on PA-10 Pin
+	//kod za pokretanje ADC-a
+	HAL_ADC_Start(&hadc1);
 
+	//postavljamo servo motore na pozicije u kojima miruju
+	Servo_motor(PWM2, 180);
+	Servo_motor(PWM3, 80);
+	int number = 0;
+	sys_flag = 0;
 	/* USER CODE END 2 */
-
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
 
-		//  masa=HX711_get_units(10);
-		Servo_motor(PWM1, 0);
-		HAL_Delay(1000);
-		Servo_motor(PWM1, 180);
-		HAL_Delay(1000);
-		//printf("%d\n\r", masa);
+		if (sys_flag == 0) {
+			Parse_spremnik();
+		}
+		//------------------------------SORTIRANJE PREDMETA----------------------------
+		else if (sys_flag == 1) {
+			//ocitava vrijednost senzora te ako ima predmeta u cijevi krece raditi
+			if ((HAL_ADC_GetValue(&hadc1)) >= CIJEV_PUNO) {
+				Pomakni_na_vagu();
+				//pomicemo predmet na pola vage
+				Servo_motor(PWM2, 160);
+				HAL_Delay(500);
+				Servo_motor(PWM2, 180);
+				//vaganje i slanje signala rpi za slikanje
+				Predmet.masa = HX711_get_units(10);
+				HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, 1);
+				HAL_Delay(10);
+				HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, 0);
 
-		/*
-		 Servo_motor(PWM1,0);
-		 HAL_Delay(1000);
-		 Servo_motor(PWM1,180);
-		 HAL_Delay(1000);
-		 */
-		/*
-		 Stepper_Step(1,200);
-		 HAL_Delay(500);
-		 Stepper_Step(0,200);
-		 */
+				while (det_obj_buff[2] == '#')
+					;
+				Parse_predmet();
+				int sprem = Odabir_spremnika();
+				Postavi_spremnik(sprem);
+				Makni_sa_vage();
+			} else {
+				printf("SORTIRANJE GOTOVO\r\n");
+			}
+		}
+		//----------------------------ANALIZA PREDMETA----------------------
+		else if (sys_flag == 2) {
+
+		}
+
 		/* USER CODE END WHILE */
-
 		/* USER CODE BEGIN 3 */
-
-		//kod za odlucivanje u koji spremnik ide koji predmet
 	}
 	/* USER CODE END 3 */
 }
@@ -442,12 +460,49 @@ static void MX_GPIO_Init(void) {
 
 //funkcija za parsiranje podataka za spremnike
 void Parse_spremnik() {
+	for (int j = 0; j < 3; j++) {
+		Spremnik[j].boja = msg_protocol[(12 * j + 2)];
+		Spremnik[j].oblik = msg_protocol[(12 * j + 3)];
+		Spremnik[j].min_masa = CharToInt3((12 * j + 5), msg_protocol);
+		Spremnik[j].max_masa = CharToInt4((12 * j + 8), msg_protocol);
+	}
 
 }
 
 //funkcija za parsiranje podataka o slikanom predmetu
 void Parse_predmet() {
+	Predmet.boja = det_obj_buff[0];
+	Predmet.oblik = det_obj_buff[1];
 
+}
+int CharToInt3(int n, uint8_t* Polje) {
+	int broj = 0;
+	for (int i = 0; i < 3; i++) {
+		if (i == 0 && Polje[n] != '0') {
+			broj = (Polje[n] - 48) * 100;
+		} else if (i == 1) {
+			broj += (Polje[n + 1] - 48) * 10;
+		} else if (i == 2) {
+			broj += (Polje[n + 2] - 48);
+		}
+	}
+	return broj;
+
+}
+int CharToInt4(int n, uint8_t* Polje) {
+	int broj = 0;
+	for (int i = 0; i < 4; i++) {
+		if (i == 0 && Polje[n] != '0') {
+			broj = (Polje[n] - 48) * 1000;
+		} else if (i == 1) {
+			broj += (Polje[n + 1] - 48) * 100;
+		} else if (i == 2) {
+			broj += (Polje[n + 2] - 48) * 10;
+		} else if (i == 3) {
+			broj += (Polje[n + 3] - 48);
+		}
+	}
+	return broj;
 }
 
 //funkcija za analizu kriteriaj za svaki spremnik i trenutni predmet-----------------------------------
@@ -461,7 +516,8 @@ void Analiza_predmeta(void) {
 		if (Spremnik[i].oblik == Predmet.oblik) {
 			Spremnik[i].broj_poklapanja++;
 		}
-		if (Spremnik[i].max_masa >= Predmet.masa >= Spremnik[i].min_masa) {
+		if (Spremnik[i].max_masa >= Predmet.masa
+				|| Predmet.masa >= Spremnik[i].min_masa) {
 			Spremnik[i].broj_poklapanja++;
 		}
 	}
@@ -475,6 +531,8 @@ int Odabir_spremnika() {
 		if (Spremnik[i].broj_poklapanja > max_poklapanja) {
 			max_poklapanja = Spremnik[i].broj_poklapanja;
 			index = i + 1;
+		} else {
+			index = 4;
 		}
 	}
 
@@ -562,6 +620,69 @@ void Stepper_Step(int dir, int step) {
 void Servo_motor(PWM_CHANNEL PWM_CH, int kut) {
 	float stupnjevi = ((7656 / 1800.0) * (kut + 45.0));
 	__HAL_TIM_SET_COMPARE(&htim1, PWM_CH, (stupnjevi)); //180 stupnjeva 8000*0,125
+}
+
+void Pomakni_na_vagu() {
+	Servo_motor(PWM3, 120);
+	HAL_Delay(1000);
+	Servo_motor(PWM3, 38);
+	HAL_Delay(1000);
+	Servo_motor(PWM3, 80);
+	HAL_Delay(1000);
+}
+void Makni_sa_vage() {
+	Servo_motor(PWM2, 160);
+	HAL_Delay(1000);
+	Servo_motor(PWM2, 110);
+	HAL_Delay(1000);
+	Servo_motor(PWM2, 180);
+	HAL_Delay(1000);
+}
+void Postavi_spremnik(int spremnik) {
+
+	switch (spremnik) {
+	case 1:
+		if (stepperPosition == 2) {
+			Stepper_Step((BROJ_KORAKAK_ZA_KRUG / 4), 0);
+		} else if (stepperPosition == 3) {
+			Stepper_Step((BROJ_KORAKAK_ZA_KRUG / 2), 0);
+		} else if (stepperPosition == 4) {
+			Stepper_Step(((BROJ_KORAKAK_ZA_KRUG / 4) * 3), 0);
+		}
+		stepperPosition = 1;
+		break;
+	case 2:
+		if (stepperPosition == 1) {
+			Stepper_Step(((BROJ_KORAKAK_ZA_KRUG / 4) * 3), 0);
+		} else if (stepperPosition == 3) {
+			Stepper_Step((BROJ_KORAKAK_ZA_KRUG / 4), 0);
+		} else if (stepperPosition == 4) {
+			Stepper_Step((BROJ_KORAKAK_ZA_KRUG / 2), 0);
+		}
+		stepperPosition = 2;
+		break;
+	case 3:
+		if (stepperPosition == 1) {
+			Stepper_Step((BROJ_KORAKAK_ZA_KRUG / 2), 0);
+		} else if (stepperPosition == 2) {
+			Stepper_Step(((BROJ_KORAKAK_ZA_KRUG / 4) * 3), 0);
+		} else if (stepperPosition == 4) {
+			Stepper_Step((BROJ_KORAKAK_ZA_KRUG / 4), 0);
+		}
+		stepperPosition = 3;
+		break;
+	case 4:
+		if (stepperPosition == 1) {
+			Stepper_Step((BROJ_KORAKAK_ZA_KRUG / 4), 0);
+		} else if (stepperPosition == 2) {
+			Stepper_Step((BROJ_KORAKAK_ZA_KRUG / 2), 0);
+		} else if (stepperPosition == 3) {
+			Stepper_Step(((BROJ_KORAKAK_ZA_KRUG / 4) * 3), 0);
+		}
+		stepperPosition = 4;
+		break;
+	}
+
 }
 
 /* USER CODE END 4 */
