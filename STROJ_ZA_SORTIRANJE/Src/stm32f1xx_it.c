@@ -42,8 +42,11 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-extern volatile uint8_t rx_buff[RX_BUFF_SIZE];
-volatile uint8_t* buff_ptr=rx_buff;
+extern volatile uint8_t rx_buff[33];
+extern volatile uint8_t msg_protocol[33];
+extern volatile uint8_t det_obj_buff[3];
+extern volatile uint8_t sys_flag;
+extern volatile uint8_t sys_flag_changed;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -204,17 +207,31 @@ void SysTick_Handler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
-	  volatile static size_t buff_free=RX_BUFF_SIZE;
-	  //*buff_ptr++=huart1.Instance->DR;
-	  *buff_ptr++=USART2->DR;
-	  buff_free--;
-	  if(buff_free==0){
-		  printf("rx_buff=%s\r\n",rx_buff);
-		  buff_ptr=rx_buff;
-		  buff_free=RX_BUFF_SIZE;
-	  }
+	volatile static size_t i=0;
+
+	rx_buff[i]=USART2->DR;
+	if(rx_buff[i] == '#'){
+		if(i == 2){
+			memcpy((void*)det_obj_buff,(const void*)rx_buff,3);
+		}
+		else{
+			memcpy((void*)msg_protocol,(const void*)rx_buff,32);
+			sys_flag=(msg_protocol[30]-48);
+			if(sys_flag != 0){
+				HAL_GPIO_WritePin(GPIOC,LED_Pin,RESET);
+			}
+			else{
+				HAL_GPIO_WritePin(GPIOC,LED_Pin,SET);
+			}
+			sys_flag_changed=1;
+		}
+		i=0;
+	}
+	else{
+		i++;
+	}
+
   /* USER CODE END USART2_IRQn 0 */
-  HAL_UART_IRQHandler(&huart2);
   /* USER CODE BEGIN USART2_IRQn 1 */
 
   /* USER CODE END USART2_IRQn 1 */

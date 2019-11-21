@@ -29,10 +29,11 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f1xx_hal.h"
-#include <stdio.h>
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -60,6 +61,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LED_Pin GPIO_PIN_13
+#define LED_GPIO_Port GPIOC
 #define SENZOR_ADC_Pin GPIO_PIN_0
 #define SENZOR_ADC_GPIO_Port GPIOA
 #define SENZOR_LED_Pin GPIO_PIN_1
@@ -79,7 +82,6 @@ void Error_Handler(void);
 #define STEPPER_EN_Pin GPIO_PIN_12
 #define STEPPER_EN_GPIO_Port GPIOA
 /* USER CODE BEGIN Private defines */
-#define RX_BUFF_SIZE (10)
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
