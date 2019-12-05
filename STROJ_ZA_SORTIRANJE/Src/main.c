@@ -40,9 +40,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CIJEV_PUNO 2000 //postaviti vrijednost adc-senzora kada u cijevi ima predmeta
+#define CIJEV_PUNO 1200 //postaviti vrijednost adc-senzora kada u cijevi ima predmeta
 //senzor mora oèitati vecu vrijednost od CIJEV_PUNO da bi stroj radio
-#define BROJ_KORAKAK_ZA_KRUG 200  //definiramo koliko stepper motor mora napraviti koraka da bi obišao jedan krug
+
+//driver je u half step modu pa teba 2 puta više koraka za krug ==>>2*200=400 koraka
+#define BROJ_KORAKAK_ZA_KRUG 400  //definiramo koliko stepper motor mora napraviti koraka da bi obišao jedan krug
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -157,7 +159,7 @@ int main(void)
   /* USER CODE BEGIN 1 */
   uint32_t adc_value=0;
 	/* USER CODE END 1 */
-  
+  uint32_t masa=0;
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -194,16 +196,41 @@ int main(void)
 	HAL_ADC_Start(&hadc1);
 
 	//postavljamo servo motore na pozicije u kojima miruju
-	Servo_motor(PWM2, 180);
+	Servo_motor(PWM2, 0);
 	Servo_motor(PWM3, 80);
-	HAL_GPIO_WritePin(GPIOA,SENZOR_LED_Pin,1);
+	HAL_GPIO_WritePin(GPIOA,SENZOR_LED_Pin,SET);
 	HAL_GPIO_WritePin(GPIOC,LED_Pin,SET);
+	HAL_GPIO_WritePin(GPIOA,STEPPER_EN_Pin,SET);
 	sys_flag = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+
+		//tsestni kod za stepper motor
+		/*
+		Postavi_spremnik(4);
+		HAL_Delay(2000);
+		Postavi_spremnik(1);
+		HAL_Delay(2000);
+		Postavi_spremnik(2);
+		HAL_Delay(2000);
+*/
+
+//		Makni_sa_vage();
+
+
+		//testni kod za senzor predmeta
+		//adc_value=HAL_ADC_GetValue(&hadc1);
+
+
+		//testni kod za vagu
+		///masa = HX711_get_units(10);
+		//HAL_Delay(1000);
+
+
+		//glavni kod
 
 		if (sys_flag_changed) {
 			Parse_spremnik();
@@ -216,9 +243,9 @@ int main(void)
 			if (adc_value >= CIJEV_PUNO) {
 				Pomakni_na_vagu();
 				//pomicemo predmet na pola vage
-				Servo_motor(PWM2, 160);
+				Servo_motor(PWM2, 35);
 				HAL_Delay(500);
-				Servo_motor(PWM2, 180);
+				Servo_motor(PWM2, 0);
 				//vaganje i slanje signala rpi za slikanje
 				Predmet.masa = HX711_get_units(10);
 				HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, SET);
@@ -227,6 +254,7 @@ int main(void)
 
 				while (det_obj_buff[2] != '#');
 				Parse_predmet();
+				Analiza_predmeta();
 				int sprem = Odabir_spremnika();
 				Postavi_spremnik(sprem);
 				Makni_sa_vage();
@@ -491,6 +519,7 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(VAGA_DT_GPIO_Port, &GPIO_InitStruct);
 
+
 }
 
 /* USER CODE BEGIN 4 */
@@ -546,7 +575,9 @@ int CharToInt4(int n, uint8_t* Polje) {
 //funkcija za analizu kriteriaj za svaki spremnik i trenutni predmet-----------------------------------
 void Analiza_predmeta(void) {
 	int i = 0;
-
+    Spremnik[0].broj_poklapanja=0;
+    Spremnik[1].broj_poklapanja=0;
+    Spremnik[2].broj_poklapanja=0;
 	for (i = 0; i < 3; i++) {
 		if (Spremnik[i].boja == Predmet.boja) {
 			Spremnik[i].broj_poklapanja++;
@@ -569,10 +600,12 @@ int Odabir_spremnika() {
 		if (Spremnik[i].broj_poklapanja > max_poklapanja) {
 			max_poklapanja = Spremnik[i].broj_poklapanja;
 			index = i + 1;
-		} else {
-			index = 4;
 		}
+		}
+	if(index==0){
+		index=4;
 	}
+
 
 	return index;
 }
@@ -639,7 +672,8 @@ void HX711_Tare(int times) {
 
 //funkcija za stepper motor-------------------------STEPPER-------------------------------
 void Stepper_Step(int step,int dir) {
-	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, RESET);
+	HAL_Delay(500);
 	if (dir == 1) {
 		HAL_GPIO_WritePin(GPIOA, STEPPER_DIR_Pin, GPIO_PIN_SET);
 	} else {
@@ -647,12 +681,12 @@ void Stepper_Step(int step,int dir) {
 	}
 	for (int i = 0; i < step; i++) {
 		HAL_GPIO_WritePin(GPIOA, STEPPER_STEP_Pin, GPIO_PIN_SET);
-		HAL_Delay(10);
+		HAL_Delay(4);
 		HAL_GPIO_WritePin(GPIOA, STEPPER_STEP_Pin, GPIO_PIN_RESET);
-		HAL_Delay(10);
+		HAL_Delay(4);
 	}
-	HAL_Delay(10);
-	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, GPIO_PIN_SET);
+	HAL_Delay(500);
+	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, SET);
 }
 
 void Servo_motor(PWM_CHANNEL PWM_CH, int kut) {
@@ -661,7 +695,7 @@ void Servo_motor(PWM_CHANNEL PWM_CH, int kut) {
 }
 
 void Pomakni_na_vagu() {
-	Servo_motor(PWM3, 120);
+	Servo_motor(PWM3, 112);
 	HAL_Delay(1000);
 	Servo_motor(PWM3, 38);
 	HAL_Delay(1000);
@@ -669,11 +703,11 @@ void Pomakni_na_vagu() {
 	HAL_Delay(1000);
 }
 void Makni_sa_vage() {
-	Servo_motor(PWM2, 160);
+	Servo_motor(PWM2, 35);
 	HAL_Delay(1000);
-	Servo_motor(PWM2, 110);
+	Servo_motor(PWM2, 80);
 	HAL_Delay(1000);
-	Servo_motor(PWM2, 180);
+	Servo_motor(PWM2, 0);
 	HAL_Delay(1000);
 }
 void Postavi_spremnik(int spremnik) {
