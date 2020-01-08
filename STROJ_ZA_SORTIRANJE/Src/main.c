@@ -217,6 +217,8 @@ int main(void) {
 		 HAL_Delay(2000);
 		 */
 
+		HAL_Delay(500);
+
 //		Makni_sa_vage();
 		//testni kod za senzor predmeta
 		//adc_value=HAL_ADC_GetValue(&hadc1);
@@ -232,30 +234,50 @@ int main(void) {
 			//ocitava vrijednost senzora te ako ima predmeta u cijevi krece raditi
 			adc_value = HAL_ADC_GetValue(&hadc1);
 			if (adc_value >= CIJEV_PUNO) {
-				//Pomakni_na_vagu();
+				//pomakni_na_vagu();
 				//pomicemo predmet na pola vage
 				Servo_motor(PWM2, 35);
 				HAL_Delay(500);
 				Servo_motor(PWM2, 0);
 				//vaganje i slanje signala rpi za slikanje
 				Predmet.masa = HX711_get_units(10);
+				printf("%d\n",Predmet.masa);
+				HAL_Delay(1000);
 				HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, SET);
 				HAL_Delay(1000);
 				HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, RESET);
 
-				while (det_obj_buff[2] != '#')
-					;
+				while (det_obj_buff[2] != '#');
+
 				Parse_predmet();
 				Analiza_predmeta();
 				int sprem = Odabir_spremnika();
 				Postavi_spremnik(sprem);
 				Makni_sa_vage();
 			} else {
-				printf("SORTIRANJE GOTOVO\r\n");
+				//printf("SORTIRANJE GOTOVO\r\n");
 			}
 		}
 		//----------------------------ANALIZA PREDMETA----------------------
 		else if (sys_flag == 2) {
+			adc_value = HAL_ADC_GetValue(&hadc1);
+						if (adc_value >= CIJEV_PUNO) {
+							Pomakni_na_vagu();
+							//pomicemo predmet na pola vage
+							Servo_motor(PWM2, 35);
+							HAL_Delay(500);
+							Servo_motor(PWM2, 0);
+							//vaganje i slanje signala rpi za slikanje
+							Predmet.masa = HX711_get_units(10);
+							HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, SET);
+							HAL_Delay(1000);
+							HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, RESET);
+
+							printf("Hello Raspberry Pi This is STM32F103",Predmet.masa);
+							//while (det_obj_buff[2] != '#');
+							Postavi_spremnik(1);
+							Makni_sa_vage();
+						}
 
 		}
 
@@ -585,7 +607,7 @@ int Odabir_spremnika() {
 	int max_poklapanja = 0;
 	int index = 0;
 	for (int i = 0; i < 3; i++) {
-		if (Spremnik[i].broj_omogucenih == Spremnik[i].broj_poklapanja)
+		if (Spremnik[i].broj_omogucenih <= Spremnik[i].broj_poklapanja)
 			if (Spremnik[i].broj_poklapanja > max_poklapanja) {
 				max_poklapanja = Spremnik[i].broj_poklapanja;
 				index = i + 1;
@@ -756,6 +778,14 @@ void Error_Handler(void) {
 	/* User can add his own implementation to report the HAL error return state */
 
 	/* USER CODE END Error_Handler_Debug */
+}
+
+PUTCHAR_PROTOTYPE {
+/* Place your implementation of fputc here */
+/* e.g. write a character to the EVAL_COM1 and Loop until the end of
+transmission */
+	HAL_UART_Transmit(&huart2, (uint8_t*) &ch, 1, 0xFFFF);
+	return ch;
 }
 
 #ifdef  USE_FULL_ASSERT
