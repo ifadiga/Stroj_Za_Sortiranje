@@ -40,7 +40,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CIJEV_PUNO 1200 //postaviti vrijednost adc-senzora kada u cijevi ima predmeta
+#define CIJEV_PUNO 800 //postaviti vrijednost adc-senzora kada u cijevi ima predmeta
 //senzor mora oèitati vecu vrijednost od CIJEV_PUNO da bi stroj radio
 
 //driver je u half step modu pa teba 2 puta više koraka za krug ==>>2*200=400 koraka
@@ -65,6 +65,12 @@ volatile uint8_t msg_protocol[32];
 volatile uint8_t det_obj_buff[3];
 volatile uint8_t sys_flag = 0;
 volatile uint8_t sys_flag_changed = 0;
+
+//iz inicijalizacije ADC-a ,,globalna var da se može koristiti u main
+ADC_ChannelConfTypeDef sConfig;
+
+//varijable za adc
+uint32_t val1,val2;
 
 //faktor za vagu koji treba podesiti da bi dobro vagala( za svaki load cell drugaciji)
 float calibration_factor = -900;
@@ -143,6 +149,10 @@ void Pomakni_na_vagu(void);
 void Makni_sa_vage(void);
 //funkcija koja postavlja spremnik koji joj predamo kao argument
 void Postavi_spremnik(int spremnik);
+
+//funkcija koja namješta spremnik na prvu posudu
+void Spremnik_zero(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -156,7 +166,6 @@ void Postavi_spremnik(int spremnik);
  */
 int main(void) {
 	/* USER CODE BEGIN 1 */
-	uint32_t adc_value = 0;
 	/* USER CODE END 1 */
 	uint32_t masa = 0;
 
@@ -192,7 +201,7 @@ int main(void) {
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2); //Start Pwm signal on PA-9 Pin
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3); //Start Pwm signal on PA-10 Pin
 	//kod za pokretanje ADC-a
-	HAL_ADC_Start(&hadc1);
+
 
 	//postavljamo servo motore na pozicije u kojima miruju
 	Servo_motor(PWM2, 0);
@@ -202,42 +211,50 @@ int main(void) {
 	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, SET);
 	sys_flag = 0;
 	/* USER CODE END 2 */
-
+	Spremnik_zero();
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
 
-		//tsestni kod za stepper motor
-		/*
-		 Postavi_spremnik(4);
-		 HAL_Delay(2000);
-		 Postavi_spremnik(1);
-		 HAL_Delay(2000);
-		 Postavi_spremnik(2);
-		 HAL_Delay(2000);
-		 */
 
-		HAL_Delay(500);
+		sConfig.Channel=ADC_CHANNEL_0;
+		HAL_ADC_ConfigChannel(&hadc1,&sConfig);
+		HAL_ADC_Start(&hadc1);
+		if(HAL_ADC_PollForConversion(&hadc1,5)==HAL_OK)
+		{
+			val1=HAL_ADC_GetValue(&hadc1);
+		}
 
-//		Makni_sa_vage();
-		//testni kod za senzor predmeta
-		//adc_value=HAL_ADC_GetValue(&hadc1);
-		//testni kod za vagu
-		//HAL_Delay(1000);
+
 		//glavni kod
 		if (sys_flag_changed) {
+			Spremnik_zero();
 			Parse_spremnik();
 			sys_flag_changed = 0;
 		}
 		//------------------------------SORTIRANJE PREDMETA----------------------------
 		if (sys_flag == 1) {
 			//ocitava vrijednost senzora te ako ima predmeta u cijevi krece raditi
-			adc_value = HAL_ADC_GetValue(&hadc1);
-			if (adc_value >= CIJEV_PUNO) {
-				//pomakni_na_vagu();
+			sConfig.Channel=ADC_CHANNEL_0;
+			HAL_ADC_ConfigChannel(&hadc1,&sConfig);
+			HAL_ADC_Start(&hadc1);
+			HAL_Delay(100);
+			if(HAL_ADC_PollForConversion(&hadc1,5)==HAL_OK)
+			{
+				val1=HAL_ADC_GetValue(&hadc1);
+			}
+			if (val1 >= CIJEV_PUNO) {
+				Pomakni_na_vagu();
 				//pomicemo predmet na pola vage
+
+				Servo_motor(PWM2, 10);
+				HAL_Delay(300);
+				Servo_motor(PWM2, 20);
+				HAL_Delay(300);
+				Servo_motor(PWM2, 30);
+				HAL_Delay(300);
 				Servo_motor(PWM2, 35);
-				HAL_Delay(500);
+				HAL_Delay(300);
 				Servo_motor(PWM2, 0);
 				//vaganje i slanje signala rpi za slikanje
 				Predmet.masa = HX711_get_units(10);
@@ -254,14 +271,18 @@ int main(void) {
 				int sprem = Odabir_spremnika();
 				Postavi_spremnik(sprem);
 				Makni_sa_vage();
-			} else {
-				//printf("SORTIRANJE GOTOVO\r\n");
 			}
 		}
 		//----------------------------ANALIZA PREDMETA----------------------
 		else if (sys_flag == 2) {
-			adc_value = HAL_ADC_GetValue(&hadc1);
-						if (adc_value >= CIJEV_PUNO) {
+			sConfig.Channel=ADC_CHANNEL_0;
+			HAL_ADC_ConfigChannel(&hadc1,&sConfig);
+			HAL_ADC_Start(&hadc1);
+			if(HAL_ADC_PollForConversion(&hadc1,5)==HAL_OK)
+			{
+				val1=HAL_ADC_GetValue(&hadc1);
+			}
+						if (val1 >= CIJEV_PUNO) {
 							Pomakni_na_vagu();
 							//pomicemo predmet na pola vage
 							Servo_motor(PWM2, 35);
@@ -272,9 +293,7 @@ int main(void) {
 							HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, SET);
 							HAL_Delay(1000);
 							HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, RESET);
-
-							printf("Hello Raspberry Pi This is STM32F103",Predmet.masa);
-							//while (det_obj_buff[2] != '#');
+							while (det_obj_buff[2] != '#');
 							Postavi_spremnik(1);
 							Makni_sa_vage();
 						}
@@ -336,7 +355,7 @@ static void MX_ADC1_Init(void) {
 
 	/* USER CODE END ADC1_Init 0 */
 
-	ADC_ChannelConfTypeDef sConfig = { 0 };
+
 
 	/* USER CODE BEGIN ADC1_Init 1 */
 
@@ -358,6 +377,11 @@ static void MX_ADC1_Init(void) {
 	sConfig.Channel = ADC_CHANNEL_0;
 	sConfig.Rank = ADC_REGULAR_RANK_1;
 	sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
+		Error_Handler();
+	}
+
+	sConfig.Channel = ADC_CHANNEL_8;
 	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
 		Error_Handler();
 	}
@@ -490,7 +514,8 @@ static void MX_GPIO_Init(void) {
 	;
 	__HAL_RCC_GPIOA_CLK_ENABLE()
 	;
-
+	__HAL_RCC_GPIOB_CLK_ENABLE()
+		;
 	/*Configure GPIO pin Output Level */
 	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
@@ -713,10 +738,18 @@ void Pomakni_na_vagu() {
 	HAL_Delay(1000);
 }
 void Makni_sa_vage() {
-	Servo_motor(PWM2, 35);
-	HAL_Delay(1000);
+	Servo_motor(PWM2, 10);
+	HAL_Delay(300);
+	Servo_motor(PWM2, 25);
+	HAL_Delay(300);
+	Servo_motor(PWM2, 40);
+	HAL_Delay(300);
+	Servo_motor(PWM2, 55);
+	HAL_Delay(300);
+	Servo_motor(PWM2, 70);
+	HAL_Delay(300);
 	Servo_motor(PWM2, 80);
-	HAL_Delay(1000);
+	HAL_Delay(300);
 	Servo_motor(PWM2, 0);
 	HAL_Delay(1000);
 }
@@ -766,6 +799,33 @@ void Postavi_spremnik(int spremnik) {
 	}
 
 }
+
+//funkcija za postaavljanje prvog spremnika
+void Spremnik_zero(){
+	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, RESET);
+	HAL_GPIO_WritePin(GPIOA, STEPPER_DIR_Pin, GPIO_PIN_RESET);
+	sConfig.Channel=ADC_CHANNEL_8;
+	HAL_ADC_ConfigChannel(&hadc1,&sConfig);
+	HAL_ADC_Start(&hadc1);
+	if(HAL_ADC_PollForConversion(&hadc1,5)==HAL_OK)
+	{
+		val2=HAL_ADC_GetValue(&hadc1);
+	}
+	while(val2>10){
+		HAL_GPIO_WritePin(GPIOA, STEPPER_STEP_Pin, GPIO_PIN_SET);
+		HAL_Delay(8);
+		HAL_GPIO_WritePin(GPIOA, STEPPER_STEP_Pin, GPIO_PIN_RESET);
+		HAL_Delay(8);
+		//HAL_Delay(5);
+		val2=HAL_ADC_GetValue(&hadc1);
+
+	}
+	HAL_Delay(500);
+	stepperPosition = 1;
+
+	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, SET);
+}
+
 
 /* USER CODE END 4 */
 
