@@ -63,8 +63,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define LED_Pin GPIO_PIN_13
 #define LED_GPIO_Port GPIOC
-#define SENZOR_ADC_Pin GPIO_PIN_0
-#define SENZOR_ADC_GPIO_Port GPIOA
+#define SENZOR_ADC1_Pin GPIO_PIN_0
+#define SENZOR_ADC1_GPIO_Port GPIOA
 #define SENZOR_LED_Pin GPIO_PIN_1
 #define SENZOR_LED_GPIO_Port GPIOA
 #define VAGA_SCK_Pin GPIO_PIN_4
@@ -75,6 +75,12 @@ void Error_Handler(void);
 #define STEPPER_DIR_GPIO_Port GPIOA
 #define STEPPER_STEP_Pin GPIO_PIN_7
 #define STEPPER_STEP_GPIO_Port GPIOA
+#define HALL_SENZOR_Pin GPIO_PIN_0
+#define HALL_SENZOR_GPIO_Port GPIOB
+#define SENZOR_ADC2_Pin GPIO_PIN_1
+#define SENZOR_ADC2_GPIO_Port GPIOB
+#define TRAKA_Pin_Pin GPIO_PIN_8
+#define TRAKA_Pin_GPIO_Port GPIOA
 #define SERVO2_Pin GPIO_PIN_9
 #define SERVO2_GPIO_Port GPIOA
 #define RPI_GPIO_Pin GPIO_PIN_11

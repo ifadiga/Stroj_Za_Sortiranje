@@ -1,0 +1,2 @@
+A000000000B000000000C0000000002#
+zadnji broj je sys_flag 1>sortiranje 2>analiza

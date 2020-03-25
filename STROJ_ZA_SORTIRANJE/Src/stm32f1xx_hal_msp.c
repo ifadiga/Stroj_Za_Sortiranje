@@ -101,12 +101,19 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     __HAL_RCC_ADC1_CLK_ENABLE();
   
     __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
     /**ADC1 GPIO Configuration    
-    PA0-WKUP     ------> ADC1_IN0 
+    PA0-WKUP     ------> ADC1_IN0
+    PB0     ------> ADC1_IN8
+    PB1     ------> ADC1_IN9 
     */
-    GPIO_InitStruct.Pin = SENZOR_ADC_Pin;
+    GPIO_InitStruct.Pin = SENZOR_ADC1_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-    HAL_GPIO_Init(SENZOR_ADC_GPIO_Port, &GPIO_InitStruct);
+    HAL_GPIO_Init(SENZOR_ADC1_GPIO_Port, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = HALL_SENZOR_Pin|SENZOR_ADC2_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN ADC1_MspInit 1 */
 
@@ -132,9 +139,13 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
     __HAL_RCC_ADC1_CLK_DISABLE();
   
     /**ADC1 GPIO Configuration    
-    PA0-WKUP     ------> ADC1_IN0 
+    PA0-WKUP     ------> ADC1_IN0
+    PB0     ------> ADC1_IN8
+    PB1     ------> ADC1_IN9 
     */
-    HAL_GPIO_DeInit(SENZOR_ADC_GPIO_Port, SENZOR_ADC_Pin);
+    HAL_GPIO_DeInit(SENZOR_ADC1_GPIO_Port, SENZOR_ADC1_Pin);
+
+    HAL_GPIO_DeInit(GPIOB, HALL_SENZOR_Pin|SENZOR_ADC2_Pin);
 
   /* USER CODE BEGIN ADC1_MspDeInit 1 */
 
@@ -176,19 +187,18 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
   
     __HAL_RCC_GPIOA_CLK_ENABLE();
     /**TIM1 GPIO Configuration    
-    PA8     ------> TIM1_CH1
     PA9     ------> TIM1_CH2
     PA10     ------> TIM1_CH3 
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_10;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
     GPIO_InitStruct.Pin = SERVO2_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(SERVO2_GPIO_Port, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_10;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN TIM1_MspPostInit 1 */
 
