@@ -40,12 +40,12 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define PRVI_SENZOR 3300 //vrijednost kada ima predmeta ispred senzora( kada nema onda je manja vrijednost)( razlika ima-nema oko 300)
-#define DRUGI_SENZOR 2900  //vrijednost kada ima predmeta ispred drugog senzora(veca razlika ima nema)
+#define PRVI_SENZOR 3800 //vrijednost kada ima predmeta ispred senzora( kada nema onda je manja vrijednost)( razlika ima-nema oko 300)
+#define DRUGI_SENZOR 3800  //vrijednost kada ima predmeta ispred drugog senzora(veca razlika ima nema)
 //da bi provjerili jel ima predmet uvjet je da je adc_vrijednost veca od pragova
 
-//driver je u half step modu pa teba 2 puta više koraka za krug ==>>2*200=400 koraka
-#define BROJ_KORAKAK_ZA_KRUG 400  //definiramo koliko stepper motor mora napraviti koraka da bi obišao jedan krug
+//driver je u half step modu pa teba 2 puta viÅ¡e koraka za krug ==>>2*200=400 koraka
+#define BROJ_KORAKAK_ZA_KRUG 400  //definiramo koliko stepper motor mora napraviti koraka da bi obiÅ¡ao jedan krug
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -66,9 +66,6 @@ volatile uint8_t msg_protocol[32];
 volatile uint8_t det_obj_buff[3];
 volatile uint8_t sys_flag = 0;
 volatile uint8_t sys_flag_changed = 0;
-
-//iz inicijalizacije ADC-a ,,globalna var da se može koristiti u main
-ADC_ChannelConfTypeDef sConfig = { 0 };
 
 //varijable za senzore na traci i hall senzor za spremnike
 //val1 je senzor na kraju trake( kod motora) i on je na ADC1_CH0 pin PA0
@@ -126,11 +123,11 @@ int CharToInt4(int n, uint8_t* Polje);
 /*prototip funkcije za analizu predmeta
  *funkcija prema definiranim osobinama spremnika i predmeta sprema u varijablu odabrani_spremnik
  *prema cemu se poklapa svaki spremnik sa trenutnim predmetom(boja, masa i oblik)
- *i onda samo treba vidjeti u toj varijabli koji spremnik ima najviše poklapanja i staviti predmet u njega
+ *i onda samo treba vidjeti u toj varijabli koji spremnik ima najviÅ¡e poklapanja i staviti predmet u njega
  */
 void Analiza_predmeta(void);
 
-//funkcija koja ovisno o tome koji spremnik ima najviše ispunjenih uvjeta odabire jedan spremnik za trenutni predmet
+//funkcija koja ovisno o tome koji spremnik ima najviÅ¡e ispunjenih uvjeta odabire jedan spremnik za trenutni predmet
 int Odabir_spremnika(void);
 
 /*funkcije za vagu*/
@@ -154,8 +151,10 @@ void Makni_sa_vage(void);
 //funkcija koja postavlja spremnik koji joj predamo kao argument
 void Postavi_spremnik(int spremnik);
 
-//funkcija koja namješta spremnik na prvu posudu
+//funkcija koja namjeï¿½ta spremnik na prvu posudu
 void Spremnik_zero(void);
+
+uint32_t analogRead(uint8_t channel); 
 
 /* USER CODE END PFP */
 
@@ -205,7 +204,7 @@ int main(void) {
 
 	//postavljamo servo motore na pozicije u kojima miruju
 	Servo_motor(PWM2, 0);
-	Servo_motor(PWM3, 100);
+	Servo_motor(PWM3, 50);
 
 	HAL_GPIO_WritePin(GPIOC, LED_Pin, SET);
 	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, SET);
@@ -229,23 +228,13 @@ int main(void) {
 			HAL_GPIO_WritePin(GPIOA, SENZOR_LED_Pin, SET);
 			//ocitava vrijednost senzora te ako ima predmeta na traci krene raditi
 
-			sConfig.Channel = ADC_CHANNEL_0;
-			HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-			HAL_ADC_Start(&hadc1);
-			if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-				val1 = HAL_ADC_GetValue(&hadc1);
-			}
+			val1 = analogRead(0); 
 			HAL_Delay(100);
-			sConfig.Channel = ADC_CHANNEL_9;
-			HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-			HAL_ADC_Start(&hadc1);
-			HAL_Delay(100);
-			if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-				val2 = HAL_ADC_GetValue(&hadc1);
-			}
+			val2 = analogRead(9);
+			
 			if ((val1 > PRVI_SENZOR) || (val2 > DRUGI_SENZOR)) {
 				HAL_GPIO_WritePin(GPIOA, TRAKA_Pin_Pin, SET);
-				HAL_Delay(4000);
+				HAL_Delay(3000);
 				HAL_GPIO_WritePin(GPIOA, TRAKA_Pin_Pin, RESET);
 				Pomakni_na_vagu();
 
@@ -269,21 +258,9 @@ int main(void) {
 		else if (sys_flag == 2) {
 			//printf("\tUnutar sys_flag==2 if uvjeta\n\n");
 			HAL_GPIO_WritePin(GPIOA, SENZOR_LED_Pin, SET);
-			sConfig.Channel = ADC_CHANNEL_0;
-			HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-			HAL_ADC_Start(&hadc1);
+			val1 = analogRead(0);
 			HAL_Delay(100);
-			if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-				val1 = HAL_ADC_GetValue(&hadc1);
-			}
-			HAL_Delay(100);
-			sConfig.Channel = ADC_CHANNEL_9;
-			HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-			HAL_ADC_Start(&hadc1);
-			HAL_Delay(100);
-			if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-				val2 = HAL_ADC_GetValue(&hadc1);
-			}
+			val2 = analogRead(9); 
 			HAL_Delay(100);
 			if ((val1 > PRVI_SENZOR) || (val2 > DRUGI_SENZOR)) {
 				HAL_GPIO_WritePin(GPIOA, TRAKA_Pin_Pin, SET);
@@ -364,18 +341,20 @@ static void MX_ADC1_Init(void) {
 
 	/* USER CODE END ADC1_Init 0 */
 
+	ADC_ChannelConfTypeDef sConfig = {0};
+
 	/* USER CODE BEGIN ADC1_Init 1 */
 
 	/* USER CODE END ADC1_Init 1 */
 	/** Common config
 	 */
 	hadc1.Instance = ADC1;
-	hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
-	hadc1.Init.ContinuousConvMode = ENABLE;
+	hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+	hadc1.Init.ContinuousConvMode = DISABLE;
 	hadc1.Init.DiscontinuousConvMode = DISABLE;
 	hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
 	hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-	hadc1.Init.NbrOfConversion = 3;
+	hadc1.Init.NbrOfConversion = 1;
 	if (HAL_ADC_Init(&hadc1) != HAL_OK) {
 		Error_Handler();
 	}
@@ -383,24 +362,11 @@ static void MX_ADC1_Init(void) {
 	 */
 	sConfig.Channel = ADC_CHANNEL_0;
 	sConfig.Rank = ADC_REGULAR_RANK_1;
-	sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+	sConfig.SamplingTime = ADC_SAMPLETIME_41CYCLES_5;
 	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
 		Error_Handler();
 	}
-	/** Configure Regular Channel
-	 */
-	sConfig.Channel = ADC_CHANNEL_8;
-	sConfig.Rank = ADC_REGULAR_RANK_2;
-	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
-		Error_Handler();
-	}
-	/** Configure Regular Channel
-	 */
-	sConfig.Channel = ADC_CHANNEL_9;
-	sConfig.Rank = ADC_REGULAR_RANK_3;
-	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK) {
-		Error_Handler();
-	}
+	
 	/* USER CODE BEGIN ADC1_Init 2 */
 
 	/* USER CODE END ADC1_Init 2 */
@@ -757,9 +723,9 @@ void Servo_motor(PWM_CHANNEL PWM_CH, int kut) {
 }
 
 void Pomakni_na_vagu() {
-	Servo_motor(PWM3, 10);
+	Servo_motor(PWM3, 0);
 	HAL_Delay(2000);
-	Servo_motor(PWM3, 100);
+	Servo_motor(PWM3, 50);
 	HAL_Delay(1000);
 	//Servo_motor(PWM3, 80);
 	//HAL_Delay(1000);
@@ -833,27 +799,68 @@ void Spremnik_zero() {
 		HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, RESET);
 		HAL_GPIO_WritePin(GPIOA, STEPPER_DIR_Pin, GPIO_PIN_RESET);
 
-		sConfig.Channel = ADC_CHANNEL_8;
-		HAL_ADC_ConfigChannel(&hadc1, &sConfig);
-		HAL_ADC_Start(&hadc1);
-		HAL_Delay(100);
-		if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK) {
-			hall_val = HAL_ADC_GetValue(&hadc1);
-		}
-
+		hall_val = analogRead(8); 
+		
 		while (hall_val > 10) {
 			HAL_GPIO_WritePin(GPIOA, STEPPER_STEP_Pin, GPIO_PIN_SET);
 			HAL_Delay(8);
 			HAL_GPIO_WritePin(GPIOA, STEPPER_STEP_Pin, GPIO_PIN_RESET);
 			HAL_Delay(8);
 			//HAL_Delay(5);
-			hall_val = HAL_ADC_GetValue(&hadc1);
+			hall_val = analogRead(8);
 		}
 		HAL_Delay(500);
 		stepperPosition = 1;
 	}
 	HAL_GPIO_WritePin(GPIOA, STEPPER_EN_Pin, SET);
 }
+
+uint32_t analogRead(uint8_t channel) 
+{ 
+	ADC_ChannelConfTypeDef adc_config = { 
+			.Rank = ADC_REGULAR_RANK_1, 
+			.SamplingTime = ADC_SAMPLETIME_41CYCLES_5 
+	}; 
+	uint32_t retVal = 0; 
+ 
+	switch(channel){ 
+	case 0: 
+		adc_config.Channel = ADC_CHANNEL_0; 
+		if (HAL_ADC_ConfigChannel(&hadc1, &adc_config) != HAL_OK) 
+		{ 
+			Error_Handler(); 
+		} 
+		break; 
+//	case 1: 
+//	case 2: 
+//	case 3: 
+//	case 4: 
+//	case 5: 
+//	case 6: 
+//	case 7: 
+	case 8: 
+		adc_config.Channel = ADC_CHANNEL_8; 
+		if (HAL_ADC_ConfigChannel(&hadc1, &adc_config) != HAL_OK) 
+		{ 
+			Error_Handler(); 
+		} 
+		break; 
+	case 9: 
+		adc_config.Channel = ADC_CHANNEL_9; 
+		if (HAL_ADC_ConfigChannel(&hadc1, &adc_config) != HAL_OK) 
+		{ 
+			Error_Handler(); 
+		} 
+		break; 
+	} 
+ 
+	HAL_ADC_Start(&hadc1); 
+	HAL_ADC_PollForConversion(&hadc1,100); 
+	retVal = HAL_ADC_GetValue(&hadc1); 
+	HAL_ADC_Stop(&hadc1); 
+ 
+	return retVal; 
+} 
 
 PUTCHAR_PROTOTYPE {
 	/* Place your implementation of fputc here */
