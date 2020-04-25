@@ -62,6 +62,7 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 volatile uint8_t rx_buff[32];
+uint8_t tx_buff[2];
 volatile uint8_t msg_protocol[32];
 volatile uint8_t det_obj_buff[3];
 volatile uint8_t sys_flag = 0;
@@ -233,6 +234,8 @@ int main(void) {
 			val2 = analogRead(9);
 			
 			if ((val1 > PRVI_SENZOR) || (val2 > DRUGI_SENZOR)) {
+				Servo_motor(PWM3, 110);
+				HAL_Delay(400);
 				HAL_GPIO_WritePin(GPIOA, TRAKA_Pin_Pin, SET);
 				HAL_Delay(3000);
 				HAL_GPIO_WritePin(GPIOA, TRAKA_Pin_Pin, RESET);
@@ -240,7 +243,9 @@ int main(void) {
 
 				//vaganje i slanje signala rpi za slikanje
 				Predmet.masa = HX711_get_units(10);
-				printf("%d\n", Predmet.masa);
+				sprintf(tx_buff,"%.2d", Predmet.masa);
+				HAL_UART_Transmit(&huart2,tx_buff,sizeof(tx_buff),100);
+				//printf("%d\n", Predmet.masa);
 				HAL_Delay(500);
 				HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, SET);
 				HAL_Delay(1000);
@@ -263,6 +268,8 @@ int main(void) {
 			val2 = analogRead(9); 
 			HAL_Delay(100);
 			if ((val1 > PRVI_SENZOR) || (val2 > DRUGI_SENZOR)) {
+				Servo_motor(PWM3, 110);
+				HAL_Delay(400);
 				HAL_GPIO_WritePin(GPIOA, TRAKA_Pin_Pin, SET);
 				HAL_Delay(4000);
 				Pomakni_na_vagu();
@@ -271,7 +278,9 @@ int main(void) {
 
 				//vaganje i slanje signala rpi za slikanje
 				Predmet.masa = HX711_get_units(10);
-				printf("%d\n", Predmet.masa);
+				//printf("%d\n", Predmet.masa);
+				sprintf(tx_buff,"%.2d", Predmet.masa);
+				HAL_UART_Transmit(&huart2,tx_buff,sizeof(tx_buff),100);
 				HAL_Delay(500);
 				HAL_GPIO_WritePin(GPIOA, RPI_GPIO_Pin, SET);
 				HAL_Delay(1000);
